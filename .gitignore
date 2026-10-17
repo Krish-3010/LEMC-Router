@@ -1,0 +1,13 @@
+# Environments
+venv/
+.env
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Data (Optional: prevents pushing large datasets to GitHub)
+*.csv
