@@ -67,3 +67,6 @@ venv.bak/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Plotted graphs
+*.png

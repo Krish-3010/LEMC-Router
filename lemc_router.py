@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.linear_model import Ridge
@@ -31,7 +32,6 @@ DROP_COLS = [
     "Future_Congestion_Index",
 ]
 
-# Features most correlated with Future_Traffic_Demand_Mbps
 TRAFFIC_FEATURES = [
     "Predicted_Energy_Requirement_kWh",
     "Peak_Time",
@@ -48,14 +48,12 @@ TRAFFIC_FEATURES = [
     "Packet_Arrival_Rate_Kpps",
     "Memory_Utilization_Pct",
     "Active_Core_Nodes",
-    # Categorical columns (will be one-hot encoded)
     "Service_Class",
     "Network_Slice",
     "Network_Condition",
     "Traffic_Direction",
 ]
 
-# Features most correlated with Future_Congestion_Index
 CONGESTION_FEATURES = [
     "Predicted_Energy_Requirement_kWh",
     "Peak_Time",
@@ -72,7 +70,6 @@ CONGESTION_FEATURES = [
     "Downlink_Traffic_Mbps",
     "Energy_Efficiency_Mbps_per_kWh",
     "CPU_Utilization_Pct",
-    # Categorical columns (will be one-hot encoded)
     "Service_Class",
     "Network_Slice",
     "Network_Condition",
@@ -116,6 +113,212 @@ def evaluate_regression(y_true, y_pred, target_name: str) -> dict:
     print(f"  Mean Absolute Error (MAE)       : {mae:.3f}")
     print(f"  Root Mean Squared Error (RMSE)  : {rmse:.3f}")
 
+    return {
+        "r2": r2,
+        "mape": mape,
+        "mae": mae,
+        "rmse": rmse,
+        "accuracy_1_minus_mape": accuracy_1_minus_mape,
+        "normalized_accuracy": normalized_accuracy,
+    }
+
+
+def plot_prediction_graph(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    target_name: str,
+    unit: str = "",
+    num_samples: int = 100,
+    save_path: str | None = None,
+    show: bool = False,
+):
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    n_pts = min(num_samples, len(y_true))
+
+    r2 = r2_score(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred)
+    rmse = root_mean_squared_error(y_true, y_pred)
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    unit_str = f" ({unit})" if unit else ""
+
+    ax.plot(
+        range(n_pts),
+        y_true[:n_pts],
+        label=f"Original {target_name}",
+        color="#1f77b4",
+        linewidth=1.8,
+        marker="o",
+        markersize=3.5,
+        alpha=0.9,
+    )
+    ax.plot(
+        range(n_pts),
+        y_pred[:n_pts],
+        label=f"Predicted {target_name}",
+        color="#ff7f0e",
+        linewidth=1.8,
+        linestyle="--",
+        marker="x",
+        markersize=4.5,
+        alpha=0.9,
+    )
+    ax.set_title(f"{target_name}: Original vs Predicted (First {n_pts} Samples)", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Sample Index", fontsize=11)
+    ax.set_ylabel(f"{target_name}{unit_str}", fontsize=11)
+    ax.legend(loc="upper right", frameon=True, fontsize=10)
+    ax.grid(True, linestyle=":", alpha=0.6)
+
+    metrics_text = f"$R^2$: {r2:.4f}  |  MAE: {mae:.3f}{' ' + unit if unit else ''}  |  RMSE: {rmse:.3f}{' ' + unit if unit else ''}"
+    ax.text(
+        0.02,
+        0.93,
+        metrics_text,
+        transform=ax.transAxes,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#cccccc", alpha=0.9),
+        fontsize=10,
+    )
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300)
+        print(f"  [Plot Saved] {save_path}")
+
+    if show:
+        plt.show()
+
+    return fig
+
+
+def plot_all_models(
+    yt_test: np.ndarray,
+    yt_pred: np.ndarray,
+    yc_test: np.ndarray,
+    yc_pred: np.ndarray,
+    num_samples: int = 100,
+    save_dir: str = BASE_DIR,
+    show: bool = True,
+):
+    traffic_plot_path = os.path.join(save_dir, "future_traffic_evaluation.png")
+    congestion_plot_path = os.path.join(save_dir, "future_congestion_evaluation.png")
+    combined_plot_path = os.path.join(save_dir, "model_predictions_comparison.png")
+    plot_prediction_graph(
+        yt_test,
+        yt_pred,
+        target_name="Future Traffic Demand",
+        unit="Mbps",
+        num_samples=num_samples,
+        save_path=traffic_plot_path,
+        show=False,
+    )
+    plot_prediction_graph(
+        yc_test,
+        yc_pred,
+        target_name="Future Congestion Index",
+        unit="",
+        num_samples=num_samples,
+        save_path=congestion_plot_path,
+        show=False,
+    )
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 9))
+    fig.suptitle("Original vs. Predicted Network State Comparison", fontsize=15, fontweight="bold", y=0.98)
+
+    n_pts_t = min(num_samples, len(yt_test))
+    n_pts_c = min(num_samples, len(yc_test))
+
+    axes[0].plot(
+        range(n_pts_t),
+        yt_test[:n_pts_t],
+        label="Original Future Traffic Demand",
+        color="#1f77b4",
+        linewidth=1.8,
+        marker="o",
+        markersize=3.5,
+        alpha=0.9,
+    )
+    axes[0].plot(
+        range(n_pts_t),
+        yt_pred[:n_pts_t],
+        label="Predicted Future Traffic Demand",
+        color="#ff7f0e",
+        linewidth=1.8,
+        linestyle="--",
+        marker="x",
+        markersize=4.5,
+        alpha=0.9,
+    )
+    axes[0].set_title(f"Future Traffic Demand: Original vs Predicted (First {n_pts_t} Samples)", fontsize=12, fontweight="bold")
+    axes[0].set_xlabel("Sample Index", fontsize=10)
+    axes[0].set_ylabel("Traffic Demand (Mbps)", fontsize=10)
+    axes[0].legend(loc="upper right", frameon=True, fontsize=9)
+    axes[0].grid(True, linestyle=":", alpha=0.6)
+
+    r2_t = r2_score(yt_test, yt_pred)
+    mae_t = mean_absolute_error(yt_test, yt_pred)
+    rmse_t = root_mean_squared_error(yt_test, yt_pred)
+    axes[0].text(
+        0.02,
+        0.92,
+        f"$R^2$: {r2_t:.4f}  |  MAE: {mae_t:.2f} Mbps  |  RMSE: {rmse_t:.2f} Mbps",
+        transform=axes[0].transAxes,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#cccccc", alpha=0.9),
+        fontsize=9,
+    )
+
+    axes[1].plot(
+        range(n_pts_c),
+        yc_test[:n_pts_c],
+        label="Original Future Congestion Index",
+        color="#2ca02c",
+        linewidth=1.8,
+        marker="o",
+        markersize=3.5,
+        alpha=0.9,
+    )
+    axes[1].plot(
+        range(n_pts_c),
+        yc_pred[:n_pts_c],
+        label="Predicted Future Congestion Index",
+        color="#d62728",
+        linewidth=1.8,
+        linestyle="--",
+        marker="x",
+        markersize=4.5,
+        alpha=0.9,
+    )
+    axes[1].set_title(f"Future Congestion Index: Original vs Predicted (First {n_pts_c} Samples)", fontsize=12, fontweight="bold")
+    axes[1].set_xlabel("Sample Index", fontsize=10)
+    axes[1].set_ylabel("Congestion Index", fontsize=10)
+    axes[1].legend(loc="upper right", frameon=True, fontsize=9)
+    axes[1].grid(True, linestyle=":", alpha=0.6)
+
+    r2_c = r2_score(yc_test, yc_pred)
+    mae_c = mean_absolute_error(yc_test, yc_pred)
+    rmse_c = root_mean_squared_error(yc_test, yc_pred)
+    axes[1].text(
+        0.02,
+        0.92,
+        f"$R^2$: {r2_c:.4f}  |  MAE: {mae_c:.4f}  |  RMSE: {rmse_c:.4f}",
+        transform=axes[1].transAxes,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#cccccc", alpha=0.9),
+        fontsize=9,
+    )
+
+    plt.tight_layout(rect=[0, 0.02, 1, 0.96])
+
+    plt.savefig(combined_plot_path, dpi=300)
+    print(f"  [Combined Plot Saved] {combined_plot_path}")
+
+    if show:
+        plt.show()
+
+    return fig
 
 def predict_future(
     input_data: dict | pd.DataFrame,
@@ -132,18 +335,15 @@ def predict_future(
 
     input_df = engineer_features(input_df)
 
-    # Stage 1 – select only the columns that actually exist in input_df
     traffic_cat_cols = [c for c in TRAFFIC_FEATURES if c in CATEGORICAL_COLS and c in input_df.columns]
     traffic_num_cols = [c for c in TRAFFIC_FEATURES if c not in CATEGORICAL_COLS and c in input_df.columns]
 
     traffic_input = input_df[traffic_num_cols + traffic_cat_cols].copy()
     traffic_input = pd.get_dummies(traffic_input, columns=traffic_cat_cols, drop_first=True)
-    # Pad any missing one-hot columns (unseen features) with 0
     traffic_input = traffic_input.reindex(columns=traffic_feature_cols, fill_value=0)
 
     predicted_traffic = traffic_model.predict(traffic_input.values)
 
-    # Stage 2 – same pattern, missing columns filled with 0
     congestion_cat_cols = [c for c in CONGESTION_FEATURES if c in CATEGORICAL_COLS and c in input_df.columns]
     congestion_num_cols = [c for c in CONGESTION_FEATURES if c not in CATEGORICAL_COLS and c in input_df.columns]
 
@@ -169,7 +369,7 @@ def predict_future(
     }
 
 
-def train_models():
+def train_models(plot: bool = True, show_plots: bool = True):
     print(f"Loading dataset from: {DATA_PATH}")
     df = pd.read_csv(DATA_PATH)
     print(f"Dataset Shape: {df.shape} (Rows: {len(df)}, Columns: {len(df.columns)})")
@@ -251,6 +451,18 @@ def train_models():
     yc_pred = 0.5 * yc_pred_ridge + 0.5 * yc_pred_hgb
     evaluate_regression(yc_test, yc_pred, "Future_Congestion_Index")
 
+    if plot:
+        print("\nPlotting evaluation graphs for Future Traffic Demand and Future Congestion Index...")
+        plot_all_models(
+            yt_test=yt_test,
+            yt_pred=yt_pred,
+            yc_test=yc_test,
+            yc_pred=yc_pred,
+            num_samples=100,
+            save_dir=BASE_DIR,
+            show=show_plots,
+        )
+
     print("  Training prediction model on feature subset...")
     pt_sub_train = traffic_pred_model.predict(Xt_train)[:, np.newaxis]
     pt_sub_test = traffic_pred_model.predict(Xt_test)[:, np.newaxis]
@@ -276,6 +488,12 @@ def train_models():
         "congestion_hgb": congestion_pred_hgb,
         "traffic_feature_cols": traffic_feature_cols,
         "congestion_feature_cols": congestion_feature_cols,
+        "evaluation_data": {
+            "yt_test": yt_test,
+            "yt_pred": yt_pred,
+            "yc_test": yc_test,
+            "yc_pred": yc_pred,
+        },
     }
 
 
