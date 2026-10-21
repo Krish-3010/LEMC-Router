@@ -10,11 +10,6 @@ venv/
 __pycache__/
 *.pyc
 
-# Data files (Ignore all CSVs except the raw dataset)
-data/*.csv
-*.csv
-!data/5g_core_traffic_energy_management_dataset.csv
-
 # Saved Model Artifacts
 models/*.pkl
 *.pkl
