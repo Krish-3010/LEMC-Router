@@ -10,11 +10,6 @@ venv/
 __pycache__/
 *.pyc
 
-# Data files (Ignore all CSVs except the raw dataset)
-data/*.csv
-*.csv
-!data/Network.csv
-
 # Saved Model Artifacts
 models/*.pkl
 *.pkl
